@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Big Éclat 3D – Burgers</title>
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=DM+Sans:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#C8321F;--ink:#FFF4DC;--mut:#FFD9B8;--card:#A92716;--bar:#FFC83D;--onbar:#3A1208;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#2A100B;--card:#3D1810;--mut:#E8B99A}}
+:root[data-theme="dark"]{--bg:#2A100B;--card:#3D1810;--mut:#E8B99A}
+*{box-sizing:border-box}
+html{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.5 "DM Sans",system-ui,sans-serif}
+h1,h2{font-family:"Bowlby One",Impact,sans-serif;font-weight:400;line-height:1;margin:0}
+.track{height:420vh;position:relative}
+.stick{position:sticky;top:0;height:100vh;height:100dvh;overflow:hidden}
+.title{position:absolute;z-index:2;top:calc(env(safe-area-inset-top,0px) + 16px);left:0;right:0;text-align:center;padding:0 16px;pointer-events:none}
+.title h1{font-size:clamp(30px,8vw,64px)}
+.title p{margin:6px 0 0;color:var(--mut)}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.lab{position:absolute;left:0;top:0;width:130px;font-weight:700;font-size:14px;line-height:1.2;opacity:0;pointer-events:none;will-change:transform}
+.hint{position:absolute;z-index:2;left:0;right:0;text-align:center;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);font-size:14px;color:var(--mut)}
+.end{padding:72px 20px 64px;max-width:760px;margin:0 auto}
+.end h2{font-size:clamp(30px,7vw,52px);margin-bottom:10px}
+.big{font:400 clamp(44px,12vw,92px)/1 "Bowlby One",Impact,sans-serif;color:var(--bar);margin:22px 0 4px}
+.row{margin:18px 0}
+.row div.t{display:flex;justify-content:space-between;font-weight:700;margin-bottom:6px}
+.bar{height:26px;background:var(--card);border-radius:13px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--bar);border-radius:13px;transition:width 1.4s cubic-bezier(.2,.8,.2,1)}
+.cta{display:inline-block;margin-top:26px;background:var(--bar);color:var(--onbar);font:400 20px "Bowlby One",Impact,sans-serif;padding:16px 28px;border:0;border-radius:40px;cursor:pointer}
+.form{display:grid;gap:10px;max-width:420px;margin-top:26px}
+.form input,.form select{font:inherit;padding:12px;border:0;border-radius:10px;background:var(--card);color:var(--ink)}
+.form .cta{margin-top:6px;text-align:center;text-decoration:none}
+.cta:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.note{color:var(--mut);font-size:13px;margin-top:28px}
+#msg{min-height:1.4em;margin-top:12px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="track" id="track">
+<div class="stick" id="stick">
+<div class="title"><h1>Big Éclat</h1><p>Un burger qui explose de saveurs.</p></div>
+<canvas id="cv" aria-label="Burger en 3D"></canvas>
+<div class="hint" id="hint">Faites défiler vers le bas</div>
+</div>
+</div>
+
+<section class="end" id="end">
+<h2>Ils ont déjà goûté</h2>
+<p>Burgers et frites commandés depuis l'ouverture.</p>
+<div class="big" id="total">0</div>
+<div>plats commandés au total</div>
+<div id="rows"></div>
+<div class="form">
+<input id="nm" placeholder="Votre nom" aria-label="Votre nom">
+<select id="dish" aria-label="Votre plat"><option>Le Classique</option><option>Double Cheddar</option><option>Le Piquant</option><option>Veggie Éclat</option><option>Frites maison</option></select>
+<a class="cta" id="order" href="mailto:adibnizar57@gmail.com" target="_blank" rel="noopener">Commander mon burger</a>
+<div id="msg" role="status">Un e-mail prérempli s'ouvre : appuyez sur envoyer pour valider. Ou écrivez-nous à adibnizar57@gmail.com</div>
+</div>
+<p class="note">Chiffres affichés à titre d'exemple.</p>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var names=["Pain brioché au sésame","Salade croquante","Tomate fraîche","Cheddar fondu","Steak haché grillé","Pain du dessous"];
+var base=[1.2,1.1,0.96,0.87,0.6,0];
+var stick=document.getElementById("stick"),cv=document.getElementById("cv");
+var labs=names.map(function(n){var d=document.createElement("div");d.className="lab";d.textContent=n;stick.appendChild(d);return d});
+var renderer,scene,camera,group,meshes=[],ok=false;
+try{
+ renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+ renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+ scene=new THREE.Scene();
+ camera=new THREE.PerspectiveCamera(40,1,0.1,100);
+ scene.add(new THREE.HemisphereLight(0xfff4dc,0x6a2012,0.55));
+ var dl=new THREE.DirectionalLight(0xffffff,1.1);dl.position.set(5,9,6);scene.add(dl);
+ var pl=new THREE.PointLight(0xffc83d,0.9);pl.position.set(-6,3,5);scene.add(pl);
+ var rim=new THREE.PointLight(0xffffff,0.5);rim.position.set(0,2,-7);scene.add(rim);
+ group=new THREE.Group();scene.add(group);
+ function mat(c){return new THREE.MeshStandardMaterial({color:c,roughness:0.4,metalness:0.08,side:THREE.DoubleSide})}
+
+ function tex(draw){var c=document.createElement("canvas");c.width=c.height=256;draw(c.getContext("2d"));return new THREE.CanvasTexture(c)}
+ function lat(pts){return new THREE.LatheGeometry(pts.map(function(q){return new THREE.Vector2(q[0],q[1])}),72)}
+ // pain du dessus
+ var tp=[[0,1.08],[.45,1.06],[.9,.95],[1.28,.7],[1.52,.38],[1.62,.14],[1.56,.02],[1.4,0],[0,0]];
+ var tg=lat(tp),cols=[],ps=tg.attributes.position;
+ for(var k=0;k<ps.count;k++){var f=Math.min(1,ps.getY(k)/1.1);cols.push(0.78+0.17*f,0.45+0.2*f,0.2+0.1*f)}
+ tg.setAttribute("color",new THREE.Float32BufferAttribute(cols,3));
+ var top=new THREE.Group();
+ top.add(new THREE.Mesh(tg,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.45,metalness:.05,side:THREE.DoubleSide})));
+ var sm=mat(0xFFF1D0);
+ for(var i=0;i<60;i++){var a=Math.random()*6.283,u=1+Math.random()*3,i0=Math.floor(u),fr=u-i0;
+  var r=tp[i0][0]*(1-fr)+tp[i0+1][0]*fr,y=tp[i0][1]*(1-fr)+tp[i0+1][1]*fr;
+  var sd=new THREE.Mesh(new THREE.SphereGeometry(.055,10,8),sm);sd.scale.set(1,.5,1.8);
+  sd.position.set(r*Math.cos(a)*1.01,y+.02,r*Math.sin(a)*1.01);sd.lookAt(sd.position.clone().multiplyScalar(2));top.add(sd)}
+ // salade
+ function leaf(R,fq,c,rot){var g=new THREE.RingGeometry(.02,R,96,10),p=g.attributes.position;
+  for(var j=0;j<p.count;j++){var x=p.getX(j),y=p.getY(j),r=Math.sqrt(x*x+y*y)/R,th=Math.atan2(y,x);p.setZ(j,Math.sin(th*fq)*.14*r*r+Math.sin(th*3+r*4)*.05*r)}
+  g.computeVertexNormals();var m=new THREE.Mesh(g,mat(c));m.rotation.x=-Math.PI/2;m.rotation.z=rot;return m}
+ var sal=new THREE.Group(),l1=leaf(1.9,12,0x6FBF48,0),l2=leaf(1.75,9,0x4F9E34,1);l2.position.y=.07;sal.add(l1,l2);
+ // tomate
+ var tt=tex(function(c){var g=c.createRadialGradient(128,128,10,128,128,128);g.addColorStop(0,"#F26B4B");g.addColorStop(.8,"#E5392A");g.addColorStop(1,"#C42A1E");c.fillStyle=g;c.fillRect(0,0,256,256);c.strokeStyle="#FF9A80";c.lineWidth=5;for(var i=0;i<6;i++){c.beginPath();c.moveTo(128,128);c.lineTo(128+Math.cos(i*1.047)*100,128+Math.sin(i*1.047)*100);c.stroke()}c.fillStyle="#FFE08A";for(var i=0;i<12;i++){var a=i*.5236;c.beginPath();c.ellipse(128+Math.cos(a)*62,128+Math.sin(a)*62,6,10,a,0,6.283);c.fill()}});
+ var tmat=[mat(0xC9301F),new THREE.MeshStandardMaterial({map:tt,roughness:.3}),new THREE.MeshStandardMaterial({map:tt,roughness:.3})];
+ var tom=new THREE.Group();
+ [[-.55,-.3,0],[.6,-.15,.03],[0,.7,-.03]].forEach(function(q){var s=new THREE.Mesh(new THREE.CylinderGeometry(1,1,.14,40),tmat);s.position.set(q[0],q[2],q[1]);tom.add(s)});
+ // cheddar qui coule sur les bords
+ var cgm=new THREE.BoxGeometry(2.9,.05,2.9,28,1,28),cp=cgm.attributes.position;
+ for(var j=0;j<cp.count;j++){var d=Math.sqrt(cp.getX(j)*cp.getX(j)+cp.getZ(j)*cp.getZ(j));if(d>1.45)cp.setY(j,cp.getY(j)-Math.pow(d-1.45,2)*1.1)}
+ cgm.computeVertexNormals();
+ var che=new THREE.Mesh(cgm,new THREE.MeshStandardMaterial({color:0xFFB81F,roughness:.25,side:THREE.DoubleSide}));che.rotation.y=Math.PI/4;
+ // steak
+ var pg=new THREE.CylinderGeometry(1.62,1.62,.4,72,4),pp=pg.attributes.position;
+ for(var j=0;j<pp.count;j++){var x=pp.getX(j),y=pp.getY(j),z=pp.getZ(j),n=(Math.sin(x*7+z*3)*Math.cos(z*8-x*2)+Math.sin(x*15+z*11)*.5)*.035,rr=Math.sqrt(x*x+z*z);if(rr>1)pp.setXYZ(j,x*(1+n*.5),y+n,z*(1+n*.5));else pp.setY(j,y+n)}
+ pg.computeVertexNormals();
+ var pt=tex(function(c){c.fillStyle="#5A2C16";c.fillRect(0,0,256,256);for(var i=0;i<500;i++){c.fillStyle=Math.random()<.5?"#44200F":"#7A3F20";c.fillRect(Math.random()*256,Math.random()*256,4,4)}c.strokeStyle="#22100A";c.lineWidth=14;for(var i=-2;i<6;i++){c.beginPath();c.moveTo(i*60,0);c.lineTo(i*60+160,256);c.stroke()}});
+ var pat=new THREE.Mesh(pg,new THREE.MeshStandardMaterial({map:pt,roughness:.75}));
+ // pain du dessous
+ var bp=[[0,0],[1.3,0],[1.5,.06],[1.58,.22],[1.52,.4],[1.38,.45],[0,.45]];
+ var bg=lat(bp),bcl=[],bps=bg.attributes.position;
+ for(var k=0;k<bps.count;k++){var f2=Math.min(1,bps.getY(k)/.45);bcl.push(.72+.12*f2,.42+.14*f2,.18+.08*f2)}
+ bg.setAttribute("color",new THREE.Float32BufferAttribute(bcl,3));
+ var bot=new THREE.Mesh(bg,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.5,side:THREE.DoubleSide}));
+ meshes=[top,sal,tom,che,pat,bot];
+ meshes.forEach(function(m,i){m.position.y=base[i];group.add(m)});
+ group.position.y=-0.8;
+ ok=true;
+}catch(e){console.error(e)}
+
+var vp=new THREE.Vector3();
+function size(){
+ var w=stick.clientWidth,h=stick.clientHeight;
+ if(!ok)return;
+ renderer.setSize(w,h,false);camera.aspect=w/h;
+ var z=Math.max(11,5.8/(0.728*camera.aspect));
+ camera.position.set(0,3.2+z*0.12,z);camera.lookAt(0,0.4,0);camera.updateProjectionMatrix();
+}
+var p=0,tm=0,spin=0,spinT=0,dragX=null;
+cv.style.touchAction="pan-y";
+cv.addEventListener("pointerdown",function(e){dragX=e.clientX});
+addEventListener("pointermove",function(e){if(dragX!==null){spinT+=(e.clientX-dragX)*0.012;dragX=e.clientX}});
+addEventListener("pointerup",function(){dragX=null});
+if(!ok)document.getElementById("hint").textContent="Votre navigateur ne peut pas afficher la 3D.";
+function prog(){var t=document.getElementById("track"),m=t.offsetHeight-innerHeight;p=Math.max(0,Math.min(1,scrollY/m))}
+function frame(t){
+ tm=t;
+ if(ok){
+  var ease=p*p*(3-2*p),S=1.15;
+  group.position.x=-1.0;
+  spin+=(spinT-spin)*0.12;
+  group.rotation.set(0.5+ease*0.2,ease*Math.PI*2+t*0.0004+spin,0);
+  meshes.forEach(function(m,i){m.position.y=base[i]+(2.5-i)*ease*S});
+  renderer.render(scene,camera);
+  var w=stick.clientWidth,h=stick.clientHeight;
+  meshes.forEach(function(m,i){
+   m.getWorldPosition(vp);vp.x+=2.1;vp.project(camera);
+   var l=labs[i];
+   l.style.transform="translate("+Math.min((vp.x*0.5+0.5)*w,w-134)+"px,"+((-vp.y*0.5+0.5)*h-10)+"px)";
+   l.style.opacity=Math.max(0,Math.min(1,(p-.3)*3));
+  });
+ }
+ document.getElementById("hint").style.opacity=1-Math.min(1,p*6);
+ requestAnimationFrame(frame);
+}
+addEventListener("scroll",prog,{passive:true});
+addEventListener("resize",function(){size();prog()});
+size();prog();requestAnimationFrame(frame);
+
+var D=[["Le Classique",18420],["Double Cheddar",12960],["Le Piquant",9870],["Veggie Éclat",6340],["Frites maison",21300]];
+var tot=D.reduce(function(a,d){return a+d[1]},0),mx=Math.max.apply(null,D.map(function(d){return d[1]}));
+var rows=document.getElementById("rows");
+D.forEach(function(d){
+ var r=document.createElement("div");r.className="row";
+ r.innerHTML='<div class="t"><span>'+d[0]+'</span><span>'+d[1].toLocaleString("fr-FR")+'</span></div><div class="bar"><i data-w="'+(d[1]/mx*100)+'"></i></div>';
+ rows.appendChild(r);
+});
+var done=false;
+function run(){
+ if(done)return;done=true;
+ Array.prototype.forEach.call(document.querySelectorAll(".bar i"),function(b){b.style.width=b.dataset.w+"%"});
+ var t0=null,el=document.getElementById("total");
+ (function s(t){if(!t0)t0=t;var q=Math.min((t-t0)/1600,1);el.textContent=Math.round(tot*q).toLocaleString("fr-FR");if(q<1)requestAnimationFrame(s)})(performance.now());
+}
+if("IntersectionObserver" in window){new IntersectionObserver(function(e){if(e[0].isIntersecting)run()},{threshold:.25}).observe(document.getElementById("end"))}else run();
+function mail(){
+ var n=document.getElementById("nm").value.trim()||"un client",d=document.getElementById("dish").value;
+ document.getElementById("order").href="mailto:adibnizar57@gmail.com?subject="+encodeURIComponent("Nouvelle commande : "+d)+"&body="+encodeURIComponent("Bonjour,\n\nJe voudrais commander : "+d+".\nNom : "+n+"\n\nMerci !");
+}
+document.getElementById("nm").oninput=mail;document.getElementById("dish").onchange=mail;mail();
+</script>
+</body>
+</html>
